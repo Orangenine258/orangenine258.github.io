@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>俄罗斯方块</title>
+    <style>
+        /* 游戏整体样式 */
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        /* 游戏容器 */
+        #game {
+            background-color: #222;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+        }
+        /* 游戏画布 */
+        #tetris {
+            border: 2px solid #fff;
+        }
+        /* 游戏说明 */
+        #info {
+            color: #fff;
+            margin-top: 10px;
+            text-align: center;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div id="game">
+        <canvas id="tetris" width="240" height="480"></canvas>
+        <div id="info">
+            🎮 操作说明：<br>
+            ← → 左右移动 | ↑ 旋转 | ↓ 加速下落 | 空格 直接落下
+        </div>
+    </div>
+
+    <script>
+        // 1. 初始化画布和游戏参数
+        const canvas = document.getElementById('tetris');
+        const ctx = canvas.getContext('2d');
+        const scale = 20; // 每个方块的大小（像素）
+        const rows = canvas.height / scale; // 行数
+        const cols = canvas.width / scale; // 列数
+        let board = []; // 游戏棋盘
+        let piece = null; // 当前方块
+        let score = 0; // 分数
+
+        // 2. 定义俄罗斯方块的形状和颜色
+        const shapes = [
+            [[1, 1, 1, 1]], // I型
+            [[1, 1], [1, 1]], // O型
+            [[1, 1, 1], [0, 1, 0]], // T型
+            [[1, 1, 1], [1, 0, 0]], // L型
+            [[1, 1, 1], [0, 0, 1]], // J型
+            [[1, 1, 0], [0, 1, 1]], // S型
+            [[0, 1, 1], [1, 1, 0]]  // Z型
+        ];
+        const colors = ['#00ffff', '#ffff00', '#a020f0', '#ffa500', '#0000ff', '#00ff00', '#ff0000'];
+
+        // 3. 初始化棋盘（填充0，0代表空）
+        function initBoard() {
+            for (let r = 0; r < rows; r++) {
+                board[r] = [];
+                for (let c = 0; c < cols; c++) {
+                    board[r][c] = 0;
+                }
+            }
+        }
+
+        // 4. 随机生成一个新方块
+        function randomPiece() {
+            const idx = Math.floor(Math.random() * shapes.length);
+            const shape = shapes[idx];
+            // 初始位置：顶部居中
+            return {
+                shape: shape,
+                color: colors[idx],
+                x: Math.floor(cols / 2) - Math.floor(shape[0].length / 2),
+                y: 0
+            };
+        }
+
+        // 5. 绘制单个方块
+        function drawBlock(x, y, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x * scale, y * scale, scale - 1, scale - 1); // -1 留缝隙
+            ctx.strokeStyle = '#333';
+            ctx.strokeRect(x * scale, y * scale, scale - 1, scale - 1);
+        }
+
+        // 6. 绘制整个游戏画面
+        function draw() {
+            // 清空画布
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制棋盘上已固定的方块
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    if (board[r][c]) {
+                        drawBlock(c, r, board[r][c]);
+                    }
+                }
+            }
+            
+            // 绘制当前下落的方块
+            if (piece) {
+                for (let r = 0; r < piece.shape.length; r++) {
+                    for (let c = 0; c < piece.shape[r].length; c++) {
+                        if (piece.shape[r][c]) {
+                            drawBlock(piece.x + c, piece.y + r, piece.color);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 7. 检查方块是否碰撞（边界/已有方块）
+        function checkCollision(shape, x, y) {
+            for (let r = 0; r < shape.length; r++) {
+                for (let c = 0; c < shape[r].length; c++) {
+                    if (shape[r][c]) {
+                        const newX = x + c;
+                        const newY = y + r;
+                        // 超出左右边界/下边界/碰到已有方块
+                        if (newX < 0 || newX >= cols || newY >= rows || (newY >= 0 && board[newY][newX])) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        // 8. 固定方块到棋盘上
+        function lockPiece() {
+            for (let r = 0; r < piece.shape.length; r++) {
+                for (let c = 0; c < piece.shape[r].length; c++) {
+                    if (piece.shape[r][c]) {
+                        board[piece.y + r][piece.x + c] = piece.color;
+                    }
+                }
+            }
+            // 消除满行
+            clearLines();
+            // 生成新方块
+            piece = randomPiece();
+            // 游戏结束判断（新方块一开始就碰撞）
+            if (checkCollision(piece.shape, piece.x, piece.y)) {
+                alert(`游戏结束！你的分数：${score}`);
+                initBoard();
+                score = 0;
+            }
+        }
+
+        // 9. 消除满行并加分
+        function clearLines() {
+            let linesCleared = 0;
+            for (let r = rows - 1; r >= 0; r--) {
+                if (board[r].every(cell => cell !== 0)) { // 整行都有方块
+                    linesCleared++;
+                    // 删除当前行，上面的行下移
+                    board.splice(r, 1);
+                    board.unshift(Array(cols).fill(0));
+                    r++; // 重新检查当前行（因为上面的行下移了）
+                }
+            }
+            // 加分规则：消1行100分，消2行300分，消3行500分，消4行800分
+            score += linesCleared * 100 * (linesCleared === 1 ? 1 : linesCleared === 2 ? 3 : linesCleared === 3 ? 5 : 8);
+        }
+
+        // 10. 控制方块移动/旋转
+        function movePiece(dx, dy) {
+            if (!checkCollision(piece.shape, piece.x + dx, piece.y + dy)) {
+                piece.x += dx;
+                piece.y += dy;
+                return true;
+            }
+            // 向下移动碰撞 → 固定方块
+            if (dy > 0) {
+                lockPiece();
+                return false;
+            }
+            return false;
+        }
+
+        function rotatePiece() {
+            // 旋转逻辑：矩阵转置+反转行
+            const rotated = piece.shape[0].map((_, idx) => piece.shape.map(row => row[idx])).reverse();
+            if (!checkCollision(rotated, piece.x, piece.y)) {
+                piece.shape = rotated;
+            }
+        }
+
+        // 11. 键盘控制
+        document.addEventListener('keydown', (e) => {
+            if (!piece) return;
+            switch(e.key) {
+                case 'ArrowLeft': movePiece(-1, 0); break; // 左移
+                case 'ArrowRight': movePiece(1, 0); break; // 右移
+                case 'ArrowDown': movePiece(0, 1); break; // 下移
+                case 'ArrowUp': rotatePiece(); break; // 旋转
+                case ' ': while(movePiece(0, 1)); break; // 空格直接落到底
+            }
+            draw();
+        });
+
+        // 12. 游戏主循环（自动下落）
+        function gameLoop() {
+            if (piece) {
+                // 每500ms自动下落一格
+                setTimeout(() => {
+                    movePiece(0, 1);
+                    draw();
+                    gameLoop();
+                }, 500);
+            }
+        }
+
+        // 初始化游戏
+        initBoard();
+        piece = randomPiece();
+        draw();
+        gameLoop();
+    </script>
+</body>
+</html>
